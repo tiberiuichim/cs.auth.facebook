@@ -1,18 +1,17 @@
-import hashlib
-import json
-from logging import getLogger
-import urllib
-import urlparse
-
 from Products.CMFCore.utils import getToolByName
 from Products.PluggableAuthService.interfaces.plugins import IExtractionPlugin
 from Products.statusmessages.interfaces import IStatusMessage
 from cs.auth.facebook import FBMessageFactory as _
 from cs.auth.facebook.interfaces import ICSFacebookPlugin
 from cs.auth.facebook.plugin import SessionKeys
+from logging import getLogger
 from plone.registry.interfaces import IRegistry
 from zope.component import getUtility
 from zope.publisher.browser import BrowserView
+import hashlib
+import json
+import urllib
+# import urlparse
 
 
 FACEBOOK_AUTH_URL = "https://graph.facebook.com/oauth/authorize"
@@ -38,8 +37,9 @@ class FacebookLogin(BrowserView):
 
     def __call__(self):
         registry = getUtility(IRegistry)
-        FB_APP_ID = registry.get('cs.auth.facebook.controlpanel.IFacebookloginSettings.fb_app_id').encode()
-        FB_APP_SECRET = registry.get('cs.auth.facebook.controlpanel.IFacebookloginSettings.fb_app_secret').encode()
+        S = 'cs.auth.facebook.controlpanel.IFacebookloginSettings'
+        FB_APP_ID = registry.get(S + '.fb_app_id').encode()
+        FB_APP_SECRET = registry.get(S + '.fb_app_secret').encode()
 
         verificationCode = self.request.form.get("code", None)
         error = self.request.form.get("error", None)
@@ -53,23 +53,28 @@ class FacebookLogin(BrowserView):
             'state': salt,
             'scope': PERMISSIONS,
             'client_id': FB_APP_ID,
-            'redirect_uri': "%s/%s" % (self.context.absolute_url(), self.__name__,),
+            'redirect_uri': "%s/%s" % (self.context.absolute_url(),
+                                       self.__name__,),
         }
-        
+
         # Did we get an error back after a Facebook redirect?
         if error is not None or errorReason is not None:
             log.info(error)
             log.info(errorReason)
-            IStatusMessage(self.request).add(_(u"Facebook authentication denied"), type="error")
+            IStatusMessage(self.request).add(
+                _(u"Facebook authentication denied"), type="error")
             self.request.response.redirect(self.context.absolute_url())
             return u""
 
         # Check if the status is the same...
         return_salt = self.request.form.get('status', '')
-        if return_salt and return_salt != session.get(FB_AUTHENTICATION_SALT_KEY):
-            IStatusMessage(self.request).add(_(u"Facebook authentication denied"), type="error")
+        if return_salt and \
+                (return_salt != session.get(FB_AUTHENTICATION_SALT_KEY)):
+            IStatusMessage(self.request).add(
+                _(u"Facebook authentication denied"), type="error")
             self.request.response.redirect(self.context.absolute_url())
-            log.info('%s != %s' % (return_salt, session.get(FB_AUTHENTICATION_SALT_KEY)))
+            log.info('%s != %s' % (return_salt,
+                                   session.get(FB_AUTHENTICATION_SALT_KEY)))
             return u""
 
         # If there is no code, this is probably the first request, so redirect
@@ -85,15 +90,17 @@ class FacebookLogin(BrowserView):
         args["client_secret"] = FB_APP_SECRET
         args["code"] = verificationCode
 
-        response = urlparse.parse_qs(urllib.urlopen(
+        req = urllib.urlopen(
             "%s?%s" % (FACEBOOK_ACCESS_TOKEN_URL, urllib.urlencode(args),)
-        ).read())
+        )
+        response = json.loads(req.read())
 
         # Load the profile using the access token we just received
-        accessToken = response["access_token"][-1]
+        accessToken = response["access_token"]
 
         profile = json.load(urllib.urlopen(
-            "%s?%s" % (FACEBOOK_PROFILE_URL, urllib.urlencode({'access_token': accessToken}),)
+            "%s?%s" % (FACEBOOK_PROFILE_URL,
+                       urllib.urlencode({'access_token': accessToken}),)
         ))
 
         userId = profile.get('id').encode("utf-8")
@@ -103,14 +110,17 @@ class FacebookLogin(BrowserView):
         location = profile.get('location', {}).get('name', '').encode("utf-8")
 
         profile_image = urllib.urlopen(
-            "%s?%s" % (FACEBOOK_PROFILE_PICTURE_URL, urllib.urlencode({'access_token': accessToken}),)
+            "%s?%s" % (FACEBOOK_PROFILE_PICTURE_URL,
+                       urllib.urlencode({'access_token': accessToken}),)
         ).read()
 
         if not userId or not name:
-            IStatusMessage(self.request).add(_(u"Insufficient information in Facebook profile"), type="error")
+            IStatusMessage(self.request).add(
+                _(u"Insufficient information in Facebook profile"),
+                type="error"
+            )
             self.request.response.redirect(self.context.absolute_url())
             return u""
-
 
         # Save the data in the session so that the extraction plugin can
         # authenticate the user to Plone
@@ -129,7 +139,10 @@ class FacebookLogin(BrowserView):
         for id in ids:
             plugin = getattr(acl_plugins, id)
             if ICSFacebookPlugin.providedBy(plugin):
-                user_data = plugin._storage.get(session[SessionKeys.userId], {})
+                user_data = plugin._storage.get(
+                    session[SessionKeys.userId],
+                    {}
+                )
                 user_data['username'] = session[SessionKeys.userName]
                 user_data['fullname'] = session[SessionKeys.fullname]
                 user_data['email'] = session[SessionKeys.email]
@@ -137,12 +150,13 @@ class FacebookLogin(BrowserView):
                 user_data['portrait'] = session[SessionKeys.profile_image]
                 plugin._storage[session[SessionKeys.userId]] = user_data
 
-
-        IStatusMessage(self.request).add(_(u"Welcome. You are now logged in."), type="info")
+        IStatusMessage(self.request).add(
+            _(u"Welcome. You are now logged in."), type="info")
 
         return_args = ''
         if self.request.get('came_from', None) is not None:
             return_args = {'came_from': self.request.get('came_from')}
             return_args = '?' + urllib.urlencode(return_args)
 
-        self.request.response.redirect(self.context.absolute_url() + '/logged_in' + return_args)
+        self.request.response.redirect(
+            self.context.absolute_url() + '/logged_in' + return_args)
