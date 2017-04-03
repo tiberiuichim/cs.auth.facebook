@@ -19,7 +19,7 @@ FACEBOOK_ACCESS_TOKEN_URL = "https://graph.facebook.com/oauth/access_token"
 FACEBOOK_PROFILE_URL = "https://graph.facebook.com/me"
 FACEBOOK_PROFILE_PICTURE_URL = "https://graph.facebook.com/me/picture"
 FB_AUTHENTICATION_SALT_KEY = 'cs.auth.facebook.AUTHENTICATION_SALT_KEY'
-PERMISSIONS = 'email,user_location'
+PERMISSIONS = 'email'
 
 log = getLogger('cs.auth.facebook')
 
@@ -102,7 +102,7 @@ class FacebookLogin(BrowserView):
             "%s?%s" % (FACEBOOK_PROFILE_URL,
                        urllib.urlencode({
                            'access_token': accessToken,
-                           'fields': 'email,name,location'
+                           'fields': 'email,name'
                        }),)
         ))
 
